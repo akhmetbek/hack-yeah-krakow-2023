@@ -18,13 +18,14 @@ import java.nio.file.Paths;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.ZonedDateTime;
-import java.util.List;
+import java.util.*;
 
 @Service
 public class Gpt4Service {
     private final String apiKey;
     private final MessageRepository messageRepository;
 
+    private Queue<ChatMessage> conversationContext = new LinkedList<>() {};
     @Autowired
     public Gpt4Service(@Value("${gpt.apiKey}") String apiKey,
                        MessageRepository mR) throws IOException {
@@ -55,33 +56,61 @@ public class Gpt4Service {
     }
 
 
-    public ChatGptResponseDto generateText(FinanczeskaRequestDto dto) {
+    public ChatGptResponseDto generateText(FinanczeskaRequestDto dto) throws IOException {
         RestTemplate restTemplate = new RestTemplate();
         String apiUrl = "https://api.openai.com/v1/chat/completions"; // Replace with the actual API endpoint
-
-        preparedMessages.add(ChatMessage.builder().role("user").content(dto.getPrompt()).build());
+        List<ChatMessage> preparedMessages;
+        ResponseEntity<ChatGptResponseDto> responseEntity;
         // Create a request object and send it to the API
-        HttpEntity<ChatGptRequestDto> requestEntity = new HttpEntity<>(ChatGptRequestDto.builder().model("gpt-3.5-turbo")
-                .messages(preparedMessages).temperature(0.3F).build(),
-                prepareHeaders());
+        if(conversationContext.isEmpty()){
+            preparedMessages = List.of(new ChatMessage("user", "Hello, I am going to send a few csv files to ask questions about them"),
+                    new ChatMessage("user", "This one is avg monthly price of goods and services in Poland \n" + Files.readString(Paths.get("C:\\Users\\kasy0\\Documents\\Jurta\\hack-yeah-krakow-2023\\src\\main\\java\\com\\demo\\hackyeah\\monthly_average_cost_of_goods_and_services.csv"))),
+                    new ChatMessage("user", "This one is data on 1m sq housing price" + Files.readString(Paths.get("C:\\Users\\kasy0\\Documents\\Jurta\\hack-yeah-krakow-2023\\src\\main\\java\\com\\demo\\hackyeah\\selling_price_for_sqm_housing.csv"))),
+                    new ChatMessage("user", "Quarterly data on core inflation against previous year" + Files.readString(Paths.get("C:\\Users\\kasy0\\Documents\\Jurta\\hack-yeah-krakow-2023\\src\\main\\java\\com\\demo\\hackyeah\\quarterly_core_inflation_against_previous_year.csv"))),
+                    ChatMessage.builder().role("user").content(dto.getPrompt()).build());
+            HttpEntity<ChatGptRequestDto> requestEntity = new HttpEntity<>(ChatGptRequestDto.builder().model("gpt-3.5-turbo")
+                    .messages(preparedMessages).temperature(0.3F).build(),
+                    prepareHeaders());
+            responseEntity = restTemplate.exchange(apiUrl, HttpMethod.POST, requestEntity, ChatGptResponseDto.class);
 
-        ResponseEntity<ChatGptResponseDto> responseEntity = restTemplate.exchange(apiUrl, HttpMethod.POST, requestEntity, ChatGptResponseDto.class);
-
-        // Process the response and return the generated text
-        if (responseEntity.getStatusCode() == HttpStatus.OK) {
-            for (ChatMessage chatMessage : preparedMessages.subList(5, preparedMessages.size())){
-                messageRepository.save(Message.builder().sessionId(responseEntity.getBody().getId()).role("user").content(chatMessage.getContent()).createdDate(Timestamp.from(Instant.now())).build());
+            // Process the response and return the generated text
+            if (responseEntity.getStatusCode() == HttpStatus.OK) {
+                for (ChatMessage chatMessage : preparedMessages.subList(5, preparedMessages.size())) {
+                    conversationContext.add(chatMessage);
+                    messageRepository.save(Message.builder().sessionId(responseEntity.getBody().getId()).role("user").content(chatMessage.getContent()).createdDate(Timestamp.from(Instant.now())).build());
+                }
+                conversationContext.remove();
+                messageRepository.save(Message.builder().sessionId(responseEntity.getBody().getId()).role("assistant").content(responseEntity.getBody().getChoices().get(0).getMessage().getContent()).createdDate(Timestamp.from(Instant.now())).build());
+                conversationContext.add(responseEntity.getBody().getChoices().get(0).getMessage());
+                return responseEntity.getBody();
+            } else {
+                // Handle error cases
+                throw new RuntimeException("Error from GPT-3.5 API: " + responseEntity.getStatusCode());
             }
+        }else{
+            conversationContext.add(ChatMessage.builder().role("user").content(dto.getPrompt()).build());
+            preparedMessages = conversationContext.stream().toList();
+                    HttpEntity<ChatGptRequestDto> requestEntity = new HttpEntity<>(ChatGptRequestDto.builder().model("gpt-3.5-turbo")
+                    .messages(preparedMessages).temperature(0.3F).build(),
+                    prepareHeaders());
+            responseEntity = restTemplate.exchange(apiUrl, HttpMethod.POST, requestEntity, ChatGptResponseDto.class);
 
-            messageRepository.save(Message.builder().sessionId(responseEntity.getBody().getId()).role("assistant").content(responseEntity.getBody().getChoices().get(0).getMessage().getContent()).createdDate(Timestamp.from(Instant.now())).build());
-            return responseEntity.getBody();
-        } else {
-            // Handle error cases
-            throw new RuntimeException("Error from GPT-3.5 API: " + responseEntity.getStatusCode());
+            // Process the response and return the generated text
+            if (responseEntity.getStatusCode() == HttpStatus.OK) {
+                conversationContext.remove();
+                conversationContext.add(requestEntity.getBody().getMessages().get(requestEntity.getBody().getMessages().size()));
+                messageRepository.save(Message.builder().sessionId(responseEntity.getBody().getId()).role("assistant").content(responseEntity.getBody().getChoices().get(0).getMessage().getContent()).createdDate(Timestamp.from(Instant.now())).build());
+                conversationContext.add(responseEntity.getBody().getChoices().get(0).getMessage());
+                return responseEntity.getBody();
+            } else {
+                // Handle error cases
+                throw new RuntimeException("Error from GPT-3.5 API: " + responseEntity.getStatusCode());
+            }
         }
-    }
-    public List<ChatMessage> preparedMessages = List.of(new ChatMessage("user", "Hello, I am going to send a few csv files to ask questions about them"), new ChatMessage("user", Files.readString(Paths.get("selling_price_for_sqm_housing.csv"))), new ChatMessage("user", Files.readString(Paths.get("selling_price_for_sqm_housing.csv"))));
 
+
+
+    }
 
     private HttpHeaders prepareHeaders(){
         HttpHeaders headers = new HttpHeaders();

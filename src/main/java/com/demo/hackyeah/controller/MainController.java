@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
+
 @AllArgsConstructor
 @RestController
 @RequestMapping("/main")
@@ -17,12 +19,12 @@ public class MainController {
     private final Gpt4Service gtpService;
 
     @GetMapping
-    public ResponseEntity<ChatGptResponseDto> HelloWorld(){
-        return ResponseEntity.ok(gtpService.generateText("Hello, can we talk about how to keep context ?"));
+    public ResponseEntity<ChatGptResponseDto> HelloWorld() throws IOException {
+        return ResponseEntity.ok(gtpService.generateText(FinanczeskaRequestDto.builder().prompt("what is the inflation rate since 2021 ?").sessionId("zero").build()) );
     }
 
     @PostMapping
-    public ResponseEntity<ChatGptResponseDto> postPromt(@RequestBody FinanczeskaRequestDto dto){
+    public ResponseEntity<ChatGptResponseDto> postPromt(@RequestBody FinanczeskaRequestDto dto) throws IOException {
         return ResponseEntity.ok(gtpService.generateText(dto));
     }
 }
