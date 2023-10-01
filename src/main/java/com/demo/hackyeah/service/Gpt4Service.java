@@ -75,11 +75,13 @@ public class Gpt4Service {
 
             // Process the response and return the generated text
             if (responseEntity.getStatusCode() == HttpStatus.OK) {
-                for (ChatMessage chatMessage : preparedMessages.subList(5, preparedMessages.size())) {
+                for (ChatMessage chatMessage : preparedMessages) {
                     conversationContext.add(chatMessage);
                     messageRepository.save(Message.builder().sessionId(responseEntity.getBody().getId()).role("user").content(chatMessage.getContent()).createdDate(Timestamp.from(Instant.now())).build());
                 }
                 conversationContext.remove();
+                conversationContext.remove();
+
                 messageRepository.save(Message.builder().sessionId(responseEntity.getBody().getId()).role("assistant").content(responseEntity.getBody().getChoices().get(0).getMessage().getContent()).createdDate(Timestamp.from(Instant.now())).build());
                 conversationContext.add(responseEntity.getBody().getChoices().get(0).getMessage());
                 return responseEntity.getBody();
