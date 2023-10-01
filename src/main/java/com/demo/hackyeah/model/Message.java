@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 
+import java.sql.Timestamp;
 import java.time.ZonedDateTime;
 
 @Builder
@@ -31,5 +32,5 @@ public class Message {
     private String content;
 
     @CreatedDate
-    private ZonedDateTime createdDate;
+    private Timestamp createdDate;
 }
