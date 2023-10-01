@@ -1,6 +1,6 @@
-package com.demo.hackyeah.Dtos.Responses;
+package com.demo.hackyeah.dtos.Responses;
 
-import com.demo.hackyeah.Dtos.ChatMessage;
+import com.demo.hackyeah.dtos.ChatMessage;
 import lombok.Data;
 
 @Data

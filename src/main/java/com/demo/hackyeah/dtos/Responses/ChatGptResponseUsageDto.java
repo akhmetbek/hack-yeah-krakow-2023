@@ -1,4 +1,4 @@
-package com.demo.hackyeah.Dtos.Responses;
+package com.demo.hackyeah.dtos.Responses;
 
 import lombok.Data;
 
